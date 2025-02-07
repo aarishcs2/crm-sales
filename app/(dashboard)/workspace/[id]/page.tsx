@@ -143,7 +143,7 @@ export default function WorkspaceSettingsPage() {
   const isCollapsed = useSelector((state: RootState) => state.sidebar.isCollapsed);
   const [updateWorkspace, { isLoading: isUpdating, error: errorUpdating }] = useUpdateWorkspaceMutation();
   const [addMember, { isLoading: isAdding, error: errorAdding }] = useAddMemberMutation();
-  const [updateStatus, { isLoading: isUpdatingMember, error: errorUpdatingMember }] = useUpdateStatusMutation();
+  const [updateStatus, { isLoading: isUpdatingStatus, error: errorUpdatingMember }] = useUpdateStatusMutation();
   const [addStatus, { isLoading: isAddingStat, error: statusAddError }] = useAddStatusMutation();
   const [deleteStatus, { isLoading: isDeletingStatus, error: errorDeletingStatus }] = useDeleteStatusMutation();
   const [resendInvite, { isLoading: isResending, error: errorResending }] = useResendInviteMutation();
@@ -191,7 +191,6 @@ export default function WorkspaceSettingsPage() {
 
   const handleMemberAdd = async (newMember: WorkspaceMember) => {
     try {
-      // setMembers([...members, newMember]);
       const result = await addMember({ workspaceId, data: newMember });
 
       if ('error' in result) {
@@ -285,19 +284,20 @@ export default function WorkspaceSettingsPage() {
     };
     console.log(status);
     try {
-      const result = await addStatus({
+      const result: any = await addStatus({
         statusData: status,
         workspaceId
       }).unwrap();
+      console.log(result);
       // If successful, update the local state
       setStatuses((prevStatuses) => [
         ...prevStatuses,
         {
-          id: result.id || "",
-          name: status.name,
-          color: status.color,
-          countInStatistics: status.count_statistics,
-          workspace_show: status.showInWorkspace,
+          id: result?.data.id || "",
+          name: result?.data.name,
+          color: result?.data.color,
+          count_statistics: result?.data.count_statistics,
+          workspace_show: result?.data.showInWorkspace,
         },
       ]);
 
@@ -311,7 +311,7 @@ export default function WorkspaceSettingsPage() {
 
       setIsAddingStatus(false);
       toast.success('Status added successfully');
-      window.location.reload();
+      // window.location.reload();
     } catch (error: any) {
       const errorMessage = error.data?.error || "Failed to add status";
       toast.error(errorMessage);
@@ -1028,7 +1028,14 @@ export default function WorkspaceSettingsPage() {
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleUpdateStatus}>Save Changes</Button>
+                <Button onClick={handleUpdateStatus}> {isUpdatingStatus ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Updated Status"
+                )}</Button>
               </DialogFooter>
             </>
           )}
@@ -1042,7 +1049,8 @@ export default function WorkspaceSettingsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Status</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete Status</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete the status &quot;{statusToDelete?.name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
@@ -1053,7 +1061,14 @@ export default function WorkspaceSettingsPage() {
               onClick={confirmDeleteStatus}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isDeletingStatus ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Status"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -88,14 +88,18 @@ export default async function handler(
             }
           }
           // Insert status into the database
-          const { data, error } = await supabase.from("status").insert({
-            name,
-            color,
-            count_statistics: countInStatistics,
-            workspace_show: showInWorkspace,
-            work_id: workspaceId,
-            user_id: user.id,
-          });
+          const { data, error } = await supabase
+            .from("status")
+            .insert({
+              name,
+              color,
+              count_statistics: countInStatistics,
+              workspace_show: showInWorkspace,
+              work_id: workspaceId,
+              user_id: user.id,
+            })
+            .select("*")
+            .single();
 
           if (error) {
             return res.status(400).json({ error });
