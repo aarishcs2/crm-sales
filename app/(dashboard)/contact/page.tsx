@@ -711,7 +711,10 @@ export default function ContactPage() {
                       <div className="absolute right-0 mt-2 bg-white border shadow-lg rounded-md p-2 w-40 z-50">
                         <select
                           className="w-full border p-2 rounded"
-                          onChange={addColumn}
+                          onChange={(e) => {
+                            addColumn(e);
+                            setDropdownOpen(false);
+                          }}
                         >
                           <option value="">Select Column</option>
                           {tableHeaders
@@ -1703,7 +1706,7 @@ export default function ContactPage() {
                         }}
                       >
                         {openAddress === contact.id ? (
-                          <div className="absolute left-1/2 -translate-x-1/2  bg-white border shadow-lg rounded-md p-4 w-[450px] z-50">
+                          <div className="absolute left-1/4 -translate-x-[65%]  bg-white border shadow-lg rounded-md p-4 w-[450px] z-50">
                             <div className="flex flex-row items-center mb-4">
                               <label className="block text-sm font-semibold min-w-[80px]">
                                 Address 1

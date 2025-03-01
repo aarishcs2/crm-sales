@@ -7,6 +7,7 @@ import {
   SquareCode,
 } from "lucide-react";
 import FilterComponent from "./filter";
+import { useGetWebhooksBySourceIdQuery } from "@/lib/store/services/webhooks";
 import Papa from "papaparse";
 import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +90,7 @@ import { RootState } from "@/lib/store/store";
 import { X } from "lucide-react";
 import { formatDate } from "@/utils/date";
 import { useGetWebhooksQuery } from "@/lib/store/services/webhooks";
+import { skipToken } from "@reduxjs/toolkit/query";
 
 // Zod validation schema for lead
 const leadSchema = z.object({
@@ -147,6 +149,8 @@ const LeadManagement: React.FC = () => {
     error,
     isLoading,
   } = useGetWebhooksQuery({ id: workspaceId });
+
+  console.log(leadSources);
 
   const { data: workspaceData, isLoading: isLoadingLeads }: any =
     useGetLeadsByWorkspaceQuery(
@@ -531,9 +535,62 @@ const LeadManagement: React.FC = () => {
     );
   };
 
-  // Export to CSV
+  // export csv
+  console.log(leads);
   const exportToCSV = () => {
-    const worksheet = XLSX.utils.json_to_sheet(leads);
+    const formattedLeads = leads.map((lead) => {
+      // Find the matching lead source based on sourceId
+      const matchedSource = leadSources?.data.find((source: any) =>
+        source.webhook_url.includes(lead.sourceId)
+      );
+
+      const formattedSourceDate = matchedSource
+        ? new Date(matchedSource.created_at)
+            .toLocaleString("en-GB", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false, // 24-hour format
+            })
+            .replace(",", "")
+        : "";
+
+      return {
+        Name: lead.Name,
+        email: lead.email.toLowerCase(),
+        phone: lead.phone,
+        company: lead.company,
+        position: lead.position,
+        contact_method: lead.contact_method,
+        owner: lead.owner,
+        status: lead.status ? String(lead?.status?.name) : "Unknown",
+        revenue: lead.revenue,
+        assign_to: lead.assign_to,
+
+        createdAt: new Date(lead.createdAt)
+          .toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false, // 24-hour format
+          })
+          .replace(",", ""),
+
+        isDuplicate: lead.isDuplicate,
+        is_email_valid: lead.is_email_valid,
+        is_phone_valid: lead.is_phone_valid,
+
+        // Use the lead source name if found, otherwise set "No Source"
+        source: matchedSource
+          ? `${matchedSource.name}-${formattedSourceDate}`
+          : "No Source",
+      };
+    });
+    const worksheet = XLSX.utils.json_to_sheet(formattedLeads);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
     XLSX.writeFile(workbook, "leads_export.csv");
@@ -615,7 +672,7 @@ const LeadManagement: React.FC = () => {
                 body: validLeads, // Ensure this is an array
               });
 
-              console.log("API Response:", response);
+              // console.log("API Response:", response);
 
               setLeads((prev) => [...prev, ...validLeads]);
               toast.success("Leads created successfully");

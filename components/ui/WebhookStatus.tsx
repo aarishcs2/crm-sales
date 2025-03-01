@@ -3,7 +3,7 @@ import { skipToken } from "@reduxjs/toolkit/query";
 import {
   useGetWebhooksBySourceIdQuery,
   useUpdateWebhookMutation,
-} from "@/lib/store/services/webhooks"; // Adjust the import path
+} from "@/lib/store/services/webhooks";
 
 interface WebhookStatusProps {
   sourceId: string | null;
