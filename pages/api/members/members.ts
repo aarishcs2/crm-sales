@@ -78,7 +78,7 @@ export default async function handler(
               <p>You have been added to a workspace. Please login to your account to view the workspace.</p>
               <p><strong>Note:</strong> Your invitation expires in 2 hours.</p>
               <form action="${process.env.PUBLIC_URL}api/auth?workspaceId=${workspaceId}&email=${email}&status=${status}&action=acceptInvite" method="POST" style="display: inline;">
-                <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; font-size: 16px; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; font-size: 16px; border: none; border-radius: 5px; cursor: pointer;" role="button" aria-label="Accept workspace invitation">
                   Accept Invite
                 </button>
               </form>
@@ -144,7 +144,7 @@ export default async function handler(
             `
               <p>You have been added to a workspace. Please login to your account to view the workspace.</p>
               <form action="${process.env.PUBLIC_URL}api/auth?workspaceId=${workspaceId}&email=${email}&status=${status}&action=acceptInvite" method="POST" style="display: inline;">
-                <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; font-size: 16px; border: none; border-radius: 5px; cursor: pointer;">
+                <button type="submit" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; font-size: 16px; border: none; border-radius: 5px; cursor: pointer;" role="button" aria-label="Accept workspace invitation">
                   Accept Invite
                 </button>
               </form>
@@ -178,7 +178,6 @@ export default async function handler(
             return res.status(401).json({ error: AUTH_MESSAGES.UNAUTHORIZED });
           }
 
-          // First check if the user is the workspace owner
           const { data: workspace, error: workspaceError } = await supabase
             .from("workspaces")
             .select("owner_id")
@@ -189,7 +188,6 @@ export default async function handler(
             return res.status(400).json({ error: workspaceError.message });
           }
 
-          // Get the role of the member being removed
           const { data: memberToRemove, error: memberError } = await supabase
             .from("workspace_members")
             .select("role")
@@ -201,7 +199,6 @@ export default async function handler(
             return res.status(400).json({ error: memberError.message });
           }
 
-          // If user is not the owner, check their role in workspace_members
           if (workspace.owner_id !== user.id) {
             const { data: userRole, error: roleError } = await supabase
               .from("workspace_members")
@@ -214,7 +211,6 @@ export default async function handler(
               return res.status(400).json({ error: roleError.message });
             }
 
-            // Check if user has sufficient privileges
             if (
               !userRole ||
               (userRole.role !== "SuperAdmin" && userRole.role !== "admin")
@@ -225,7 +221,6 @@ export default async function handler(
               });
             }
 
-            // If user is admin, prevent removing SuperAdmin members
             if (
               userRole.role === "admin" &&
               memberToRemove.role === "SuperAdmin"
@@ -236,14 +231,12 @@ export default async function handler(
             }
           }
 
-          // Prevent deletion of workspace owner
           if (workspace.owner_id === memberId) {
             return res.status(403).json({
               error: "Cannot remove workspace owner",
             });
           }
 
-          // If all checks pass, proceed with member removal
           const { data, error } = await supabase
             .from("workspace_members")
             .delete()
@@ -280,7 +273,6 @@ export default async function handler(
             return res.status(401).json({ error: AUTH_MESSAGES.UNAUTHORIZED });
           }
 
-          // Check if user is admin
           const { data: adminCheck } = await supabase
             .from("workspace_members")
             .select("role")
