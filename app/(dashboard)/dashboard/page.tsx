@@ -10,9 +10,10 @@ import {
   useGetROCByWorkspaceQuery,
 } from "@/lib/store/services/workspace";
 import { RootState } from "@/lib/store/store";
+import { useConstant, useDebounce } from "@/lib/utils/renderOptimizations";
 import { Award, IndianRupee, TrendingUp, UserPlus, Users } from "lucide-react";
-import { memo, useMemo } from "react";
-import { useSelector } from "react-redux";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { shallowEqual, useSelector } from "react-redux";
 import {
   Bar,
   BarChart,
@@ -80,42 +81,78 @@ interface Workspace {
 }
 
 const SalesDashboard = memo(() => {
+  // Use shallowEqual for more accurate comparison to prevent unnecessary re-renders
   const isCollapsed = useSelector(
-    (state: RootState) => state.sidebar.isCollapsed
+    (state: RootState) => state.sidebar.isCollapsed,
+    shallowEqual
   );
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Fetch active workspace
   const { data: activeWorkspace, isLoading: isWorkspaceLoading } =
     useGetActiveWorkspaceQuery();
-  const workspaceId = activeWorkspace?.data?.id;
 
+  // Extract and memoize workspace ID to prevent unnecessary re-renders
+  const workspaceId = useMemo(() => activeWorkspace?.data?.id, [activeWorkspace]);
+
+  // Debounce workspace ID changes to prevent rapid API calls when switching workspaces
+  const debouncedWorkspaceId = useDebounce(workspaceId, 300);
+
+  // Only fetch data when we have a stable workspace ID
+  const shouldFetch = !!debouncedWorkspaceId;
+
+  // Fetch workspace data with optimized dependencies
   const { data: workspaceRevenue, isLoading: isRevenueLoading } =
-    useGetRevenueByWorkspaceQuery(workspaceId, { skip: !workspaceId });
+    useGetRevenueByWorkspaceQuery(debouncedWorkspaceId, { skip: !shouldFetch });
+
   const { data: ROC, isLoading: isRocLoading } = useGetROCByWorkspaceQuery(
-    workspaceId,
-    { skip: !workspaceId }
+    debouncedWorkspaceId,
+    { skip: !shouldFetch }
   );
+
   const { data: qualifiedCount, isLoading: isQualifiedCountLoading } =
-    useGetQualifiedCountQuery(workspaceId, { skip: !workspaceId });
+    useGetQualifiedCountQuery(debouncedWorkspaceId, { skip: !shouldFetch });
+
   const { data: workspaceCount, isLoading: isCountLoading } =
-    useGetCountByWorkspaceQuery(workspaceId, { skip: !workspaceId });
+    useGetCountByWorkspaceQuery(debouncedWorkspaceId, { skip: !shouldFetch });
+
+  // Only fetch webhooks when we have both workspace ID and top source ID
+  const topSourceId = ROC?.top_source_id;
+  const shouldFetchWebhooks = shouldFetch && !!topSourceId;
+
   const { data: webhooks, isLoading: isWebhooksLoading } =
     useGetWebhooksBySourceIdQuery(
-      { workspaceId, id: ROC?.top_source_id },
-      { skip: !workspaceId || !ROC?.top_source_id }
+      { workspaceId: debouncedWorkspaceId, id: topSourceId },
+      { skip: !shouldFetchWebhooks }
     );
 
+  // Optimize loading state calculation with useConstant for the function
+  // and useMemo for the actual calculation
+  const calculateLoading = useConstant(() =>
+    (isWorkspaceLoading: boolean, hasWorkspace: boolean, otherLoadingStates: boolean[]) => {
+      if (isWorkspaceLoading) return true;
+      if (!hasWorkspace) return false;
+      return otherLoadingStates.some(state => state);
+    }
+  );
+
   const isLoading = useMemo(
-    () =>
-      isWorkspaceLoading ||
-      (workspaceId &&
-        (isRevenueLoading ||
-          isRocLoading ||
-          isCountLoading ||
-          isQualifiedCountLoading ||
-          isWebhooksLoading)),
-    [
+    () => calculateLoading(
       isWorkspaceLoading,
-      workspaceId,
+      !!debouncedWorkspaceId,
+      [isRevenueLoading, isRocLoading, isCountLoading, isQualifiedCountLoading, isWebhooksLoading]
+    ),
+    [
+      calculateLoading,
+      isWorkspaceLoading,
+      debouncedWorkspaceId,
       isRevenueLoading,
       isRocLoading,
       isCountLoading,
@@ -124,82 +161,139 @@ const SalesDashboard = memo(() => {
     ]
   );
 
-  const dashboardStats = useMemo(
-    () => [
-      {
-        icon: <IndianRupee className="text-green-500" />,
-        title: "Revenue",
-        value: workspaceRevenue?.totalRevenue.toFixed(2) || "0",
-        change: workspaceRevenue?.change || "+0%",
-      },
-      {
-        icon: <UserPlus className="text-orange-500" />,
-        title: "Qualified Leads",
-        value: qualifiedCount?.qualifiedLeadsCount || "0",
-      },
-      {
-        icon: <Users className="text-blue-500" />,
-        title: "New Leads",
-        value: workspaceCount?.arrivedLeadsCount || 0,
-        change: "+8.3%",
-      },
-      {
-        icon: <TrendingUp className="text-purple-500" />,
-        title: "Conversion Rate",
-        value: `${ROC?.conversion_rate || 0}%`,
-        change: "+3.2%",
-      },
-      {
-        icon: <Award className="text-yellow-500" />,
-        title: "Top Performing Sources",
-        value: webhooks?.name || "N/A",
-        change: "5 Deals",
-      },
-    ],
-    [workspaceRevenue, qualifiedCount, workspaceCount, ROC, webhooks]
+  // Pre-calculate values to avoid recalculations in the render phase
+  const revenueValue = useMemo(
+    () => workspaceRevenue?.totalRevenue?.toFixed(2) || "0",
+    [workspaceRevenue]
   );
 
-  const salesData = useMemo(
-    () =>
-      (ROC?.monthly_stats || []).map(({ month, convertedLeads }: any) => ({
-        month,
-        sales: convertedLeads,
-      })),
+  const qualifiedLeadsValue = useMemo(
+    () => qualifiedCount?.qualifiedLeadsCount || "0",
+    [qualifiedCount]
+  );
+
+  const newLeadsValue = useMemo(
+    () => workspaceCount?.arrivedLeadsCount || 0,
+    [workspaceCount]
+  );
+
+  const conversionRateValue = useMemo(
+    () => `${ROC?.conversion_rate || 0}%`,
     [ROC]
   );
 
-  const containerClassName = useMemo(
-    () =>
-      `grid grid-rows-2 md:grid-rows-[25%_75%] gap-0 md:gap-2 transition-all duration-500 ease-in-out px-2 py-6 w-auto ${
-        isCollapsed ? "md:ml-[80px]" : "md:ml-[250px]"
-      } overflow-hidden`,
-    [isCollapsed]
+  const topSourceValue = useMemo(
+    () => webhooks?.name || "N/A",
+    [webhooks]
   );
 
+  // Create icons only once
+  const icons = useConstant(() => ({
+    revenue: <IndianRupee className="text-green-500" />,
+    qualifiedLeads: <UserPlus className="text-orange-500" />,
+    newLeads: <Users className="text-blue-500" />,
+    conversionRate: <TrendingUp className="text-purple-500" />,
+    topSources: <Award className="text-yellow-500" />
+  }));
+
+  // Optimize dashboard stats creation
+  const dashboardStats = useMemo(
+    () => [
+      {
+        icon: icons.revenue,
+        title: "Revenue",
+        value: revenueValue,
+        change: workspaceRevenue?.change || "+0%",
+      },
+      {
+        icon: icons.qualifiedLeads,
+        title: "Qualified Leads",
+        value: qualifiedLeadsValue,
+      },
+      {
+        icon: icons.newLeads,
+        title: "New Leads",
+        value: newLeadsValue,
+        change: "+8.3%",
+      },
+      {
+        icon: icons.conversionRate,
+        title: "Conversion Rate",
+        value: conversionRateValue,
+        change: "+3.2%",
+      },
+      {
+        icon: icons.topSources,
+        title: "Top Performing Sources",
+        value: topSourceValue,
+        change: "5 Deals",
+      },
+    ],
+    [icons, revenueValue, qualifiedLeadsValue, newLeadsValue, conversionRateValue, topSourceValue, workspaceRevenue?.change]
+  );
+
+  // Optimize sales data transformation
+  const salesData = useMemo(
+    () => {
+      const monthlyStats = ROC?.monthly_stats || [];
+      // Pre-allocate array for better performance
+      const result = new Array(monthlyStats.length);
+
+      for (let i = 0; i < monthlyStats.length; i++) {
+        const { month, convertedLeads } = monthlyStats[i];
+        result[i] = { month, sales: convertedLeads };
+      }
+
+      return result;
+    },
+    [ROC]
+  );
+
+  // Optimize class name generation
+  const baseContainerClassName = useConstant(() =>
+    "grid grid-rows-2 md:grid-rows-[25%_75%] gap-0 md:gap-2 transition-all duration-500 ease-in-out px-2 py-6 w-auto"
+  );
+
+  const containerClassName = useMemo(
+    () => `${baseContainerClassName} ${
+      isCollapsed ? "md:ml-[80px]" : "md:ml-[250px]"
+    } overflow-hidden`,
+    [baseContainerClassName, isCollapsed]
+  );
+
+  // Create skeleton cards array only once
+  const skeletonCards = useConstant(() =>
+    Array.from({ length: 5 }, (_, index) => <SkeletonCard key={index} />)
+  );
+
+  // Optimize loading state rendering
   if (isLoading) {
     return (
       <div className={containerClassName}>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 sm:gap-6 h-[322px] md:h-auto">
-          {Array.from({ length: 5 }, (_, index) => (
-            <SkeletonCard key={index} />
-          ))}
+          {skeletonCards}
         </div>
         <SkeletonChart />
       </div>
     );
   }
 
+  // Memoize the stat cards to prevent unnecessary re-renders
+  const statCards = useMemo(() => {
+    return dashboardStats.map((stat, index) => (
+      <StatCard
+        key={stat.title} // Use title as a stable key
+        stat={stat}
+        index={index}
+        totalStats={dashboardStats.length}
+      />
+    ));
+  }, [dashboardStats]);
+
   return (
     <div className={containerClassName}>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 sm:gap-6 h-[322px] md:h-auto">
-        {dashboardStats.map((stat, index) => (
-          <StatCard
-            key={stat.title} // Use title as a stable key
-            stat={stat}
-            index={index}
-            totalStats={dashboardStats.length}
-          />
-        ))}
+        {statCards}
       </div>
 
       <Card className="w-full">

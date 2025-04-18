@@ -1,20 +1,11 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { supabase } from "../../supabaseClient";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { optimizedFetchBaseQuery, CACHE_DURATIONS } from "../../utils/apiOptimizations";
 export const webhookApi = createApi({
   reducerPath: "/api/webhooks/",
-  baseQuery: fetchBaseQuery({
-    baseUrl: "/api/webhooks/webhooks",
-    prepareHeaders: async (headers) => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        headers.set("authorization", `Bearer ${session.access_token}`);
-      }
-      return headers;
-    },
-  }),
+  baseQuery: optimizedFetchBaseQuery("/api/webhooks/webhooks"),
   endpoints: () => ({}),
-  keepUnusedDataFor: 60,
+  keepUnusedDataFor: CACHE_DURATIONS.MEDIUM,
   refetchOnReconnect: true,
+  refetchOnFocus: false,
+  refetchOnMountOrArgChange: false,
 });

@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/hooks/useAuth";
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -68,6 +69,8 @@ export default function LoginPage(): JSX.Element {
     return password.length >= 6;
   };
 
+  const { login } = useAuth();
+
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const newErrors: FormErrors = {};
@@ -86,11 +89,12 @@ export default function LoginPage(): JSX.Element {
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginForm.email,
-        password: loginForm.password,
-      });
-      if (error) throw error;
+      const result = await login(loginForm.email, loginForm.password);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
       router.push("/dashboard");
       toast.success("Logged in successfully!");
     } catch (error) {
@@ -208,6 +212,8 @@ export default function LoginPage(): JSX.Element {
     }));
   };
 
+  const { isAuthenticated } = useAuth();
+
   useEffect(() => {
     const checkUserAndToken = async () => {
       const params = new URLSearchParams(window.location.search);
@@ -219,15 +225,13 @@ export default function LoginPage(): JSX.Element {
         return;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
+      // Check if user is already authenticated
+      if (isAuthenticated) {
         router.push("/dashboard");
       }
     };
     checkUserAndToken();
-  }, [router]);
+  }, [router, isAuthenticated]);
 
   if (isResetMode) {
     return (
@@ -356,12 +360,12 @@ export default function LoginPage(): JSX.Element {
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"} 
+                  type={showPassword ? "text" : "password"}
                   name="password"
                   value={loginForm.password}
                   onChange={handleLoginChange}
                   placeholder="••••••••"
-                  className="pr-10" 
+                  className="pr-10"
                 />
                 <button
                   type="button"

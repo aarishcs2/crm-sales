@@ -37,6 +37,7 @@ import {
   useUpdateWorkspaceStatusMutation,
 } from "@/lib/store/services/workspace";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/lib/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { skipToken } from "@reduxjs/toolkit/query";
 import {
@@ -140,7 +141,7 @@ export function Sidebar({
   const contactStatuses = new Set(
     Array.isArray((statusData as any)?.data)
       ? (statusData as any)?.data
-          .filter((status: any) => status.count_statistics) 
+          .filter((status: any) => status.count_statistics)
           .map((status: any) => status.name)
       : []
   );
@@ -215,42 +216,27 @@ export function Sidebar({
     //   href: "/documentation",
     // },
   ];
+  const { logout } = useAuth();
+
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      const result = await logout();
+      if (!result.success) throw new Error(result.error);
 
       toast.success("Logout completed");
-
-      window.location.href = "/login"; 
+      // No need to manually redirect - useAuth handles this
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || "Failed to logout");
     }
   };
 
+  const { user: authUser } = useAuth();
+
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchUser = async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) {
-          if (isMounted)
-            toast.error("Error fetching user data:", error.message as any);
-          return;
-        }
-        if (data && isMounted) setUser(data.user);
-      } catch (error: any) {
-        if (isMounted) toast.error(error.message);
-      }
-    };
-
-    fetchUser();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    if (authUser) {
+      setUser(authUser);
+    }
+  }, [authUser]);
 
   const handleAddWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();

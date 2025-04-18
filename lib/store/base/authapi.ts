@@ -1,27 +1,13 @@
-import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { supabase } from "../../supabaseClient";
+import { createApi } from "@reduxjs/toolkit/query/react";
+import { optimizedFetchBaseQuery, CACHE_DURATIONS } from "../../utils/apiOptimizations";
 import { RootState } from "../store";
 
 export const api = createApi({
   reducerPath: "api",
-  baseQuery: fetchBaseQuery({
-    baseUrl: "/api/auth",
-    prepareHeaders: async (headers, { getState }) => {
-      const token = (getState() as RootState).auth.token;
-      if (token) {
-        headers.set("authorization", `Bearer ${token}`);
-      } else {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          headers.set("authorization", `Bearer ${session.access_token}`);
-        }
-      }
-      return headers;
-    },
-  }),
-  keepUnusedDataFor: 60,
+  baseQuery: optimizedFetchBaseQuery("/api/auth"),
+  keepUnusedDataFor: CACHE_DURATIONS.MEDIUM,
   refetchOnReconnect: true,
+  refetchOnFocus: false, // Prevent unnecessary refetches when window regains focus
+  refetchOnMountOrArgChange: false, // Only refetch if explicitly requested or cache expired
   endpoints: () => ({}),
 });
